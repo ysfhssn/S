@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Games</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="qt.js" defer></script>
+    <script src="script.js" defer></script>
+  </head>
+
+  <body>
+    <div id="game-container">
+      <div id="infos">
+        <div>Best: <span id="best"></span></div>
+        <div>Score: <span id="score">0</span></div>
+        <div>FPS: <span id="fps"></span></div>
+      </div>
+
+      <canvas id="gc"></canvas>
+
+      <button class="start-btn">HAMILTONIAN CYCLE ⚪</button>
+      <button class="start-btn">Q LEARNING 💪</button>
+      <button class="start-btn">SINGLE PLAYER 🎮</button>
+      <div class="speed-controller">
+        <button id="increase-speed" class="speed">Increase Speed</button>
+        <button id="decrease-speed" class="speed">Decrease Speed</button>
+      </div>
+    </div>
+    <br>
+    <div>
+      <input type="range" id="epsilon" min="0" max="100">
+      <label for="volume">Ɛ</label>
+    </div>
+    <div id="range-info"></div>
+  </body>
+</html>
