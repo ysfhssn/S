@@ -1,3 +1,53 @@
+'use strict';
+
+/* GAME VARIABLES */
+const canv = document.getElementById('gc')
+const ctx = canv.getContext('2d')
+const score = document.getElementById('score')
+const best = document.getElementById('best')
+const fps = document.getElementById('fps')
+const startBtns = document.querySelectorAll('.start-btn')
+const rangeInput = document.querySelector('input[type=range]')
+const rangeInfo = document.getElementById('range-info')
+
+const [ROWS, COLS] = [20, 20]
+const SIZE_X = Math.round(canv.width / COLS)
+const SIZE_Y = Math.round(canv.height / ROWS)
+
+let interval = null,
+    mode = 'SINGLE PLAYER 🎮',
+    mspf = 1000 / 15
+
+let px, py,
+    xv, yv,
+    ax, ay,
+    dir,
+    trail, tail,
+    i,
+    canMove
+
+/* Q LEARNING VARIABLES */
+const qtable = JSON.parse(localStorage.getItem('qtable')) || qt || {}
+const ACTION_SPACE = [[0, 1], [0, -1], [1, 0], [-1, 0]]
+
+const LR = 0.01
+const DR = 0.95
+const EPSILON_DISCOUNT = 0.99
+
+let epsilon = parseFloat(localStorage.getItem('epsilon')) || 1,
+    episode = parseInt(localStorage.getItem('episode')) || 1,
+    prevPy,
+    prevPx,
+    curState,
+    newState,
+    action, // 0 1 2 3
+    reward = 0
+
+/* HAMILTONIAN CYCLE VARIABLES */
+const path = []
+const visited = new Array(ROWS).fill().map(() => new Array(COLS).fill(false))
+
+/* GAME FUNCTIONS */
 class Keys {
   static get UP() { return 1 }
   static get DOWN() { return -1 }
@@ -6,18 +56,18 @@ class Keys {
 }
 
 function resetGame() {
+  score.textContent = 0
+  best.textContent = localStorage.getItem('best') || 0
+  fps.textContent = Math.round(1000/mspf)
   document.removeEventListener('keydown', keyPush)
+
   px = Math.floor(0.5 * COLS)
   py = Math.floor(0.5 * ROWS)
-  gsx = Math.round(canv.width / COLS)
-  gsy = Math.round(canv.height / ROWS)
   ax = Math.floor(0.6 * COLS)
   ay = Math.floor(0.6 * ROWS)
   xv = yv = 0
   trail = []
   tail = 5
-  score.textContent = trail.length
-  best.textContent = localStorage.getItem('best') || 0
   dir = null
   i = 0
 
@@ -48,11 +98,14 @@ function game() {
   prevPx = px
   prevPy = py
 
+  trail.push({ x: px, y: py })
+  while (trail.length > tail) { trail.shift() }
+
   ctx.fillStyle = 'black'
   ctx.fillRect(0, 0, canv.width, canv.height)
 
   ctx.fillStyle = 'red'
-  ctx.fillRect(ax * gsx, ay * gsy, gsx - 2, gsy - 2)
+  ctx.fillRect(ax * SIZE_X, ay * SIZE_Y, SIZE_X - 2, SIZE_Y - 2)
 
   if (mode === 'HAMILTONIAN CYCLE ⚪') {
     px = path[i][0]
@@ -75,7 +128,7 @@ function game() {
     if (Math.random() < epsilon || qtable[curState].every(x => x === 0)) {
       [py, px] = neighbors([py, px])[Math.floor(Math.random() * neighbors([py, px]).length)]
     } else {
-      [yv, xv] = actions[qtable[curState].indexOf(Math.max(...qtable[curState]))]
+      [yv, xv] = ACTION_SPACE[qtable[curState].indexOf(Math.max(...qtable[curState]))]
       moveSnakeByOffset()
     }
 
@@ -89,10 +142,9 @@ function game() {
     else { action = 3 }
   }
 
-
   ctx.fillStyle = 'lime'
   for (let i = 0; i < trail.length; i++) {
-    ctx.fillRect(trail[i].x * gsx, trail[i].y * gsy, gsx - 1, gsy - 1)
+    ctx.fillRect(trail[i].x * SIZE_X, trail[i].y * SIZE_Y, SIZE_X - 1, SIZE_Y - 1)
 
     if (mode === 'SINGLE PLAYER 🎮' && !dir) { return }
 
@@ -107,7 +159,7 @@ function game() {
         updateQtable() // updating Qtable before resetting the game
 
         if (episode % 100 === 0) {
-          epsilon = epsilon * epsilonDiscount
+          epsilon = epsilon * EPSILON_DISCOUNT
           resetRangeDOMNodes()
           console.log('episode', episode, 'eps', epsilon)
           console.log('qtable', qtable)
@@ -135,9 +187,6 @@ function game() {
   }
 
   if (mode === 'Q LEARNING 💪') { updateQtable() }
-
-  trail.push({ x: px, y: py })
-  while (trail.length > tail) { trail.shift() }
 }
 
 function keyPush(evt) {
@@ -159,28 +208,19 @@ function keyPush(evt) {
   // console.log({ [Keys.RIGHT]: 'R', [Keys.LEFT]: 'L', [Keys.DOWN]: 'D', [Keys.UP]: 'U' }[dir])
 }
 
-const canv = document.getElementById('gc')
-const ctx = canv.getContext('2d')
-const score = document.getElementById('score')
-const best = document.getElementById('best')
-const fps = document.getElementById('fps')
-const [ROWS, COLS] = [20, 20]
+function resetFps() {
+  if (interval) { clearInterval(interval) }
+  interval = setInterval(game, mspf)
+  fps.textContent = Math.round(1000/mspf)
+}
 
-let interval = null,
-    mode = 'SINGLE PLAYER 🎮',
-    gameSpeed = 1000 / 15
+function resetRangeDOMNodes() {
+  rangeInput.setAttribute('value', epsilon*100)
+  rangeInfo.textContent = epsilon.toFixed(5)
+}
 
-fps.textContent = Math.round(1000/gameSpeed)
-canv.width = 400
-canv.height = 400
-resetGame()
-
-
-/**************************************************************************************
-                                    HAMILTONIAN CYCLE
-***************************************************************************************/
-// src must be [line, column]
-function findHamiltonianCycle(path, src) {
+/* HAMILTONIAN CYCLE FUNCTIONS */
+function findHamiltonianCycle(path, src) { // src must be [line, column]
   if (path.length === ROWS * COLS) { return true }
   for (let neighbor of neighbors(src)) {
     let [i, j] = neighbor
@@ -213,18 +253,7 @@ function neighbors(v) {
   return res
 }
 
-const path = []
-const visited = new Array(ROWS).fill().map(() => new Array(COLS).fill(false))
-
-visited[py][px] = true
-path.push([py, px])
-findHamiltonianCycle(path, [py, px])
-// console.log(path)
-
-
-/**************************************************************************************
-                                    Q LEARNING
-***************************************************************************************/
+/* Q LEARNING FUNCTIONS */
 function getState() {
   let [dirR, dirL, dirD, dirU] = [0, 0, 0, 0]
   if (px === 0 && prevPx === COLS-1) { dirR = 1 }
@@ -253,88 +282,55 @@ function getState() {
 
 function updateQtable() {
   if (qtable[curState]) {
-    qtable[curState][action] = (1-lr)*qtable[curState][action] + lr*(reward + dr*Math.max(...qtable[newState]))
+    qtable[curState][action] = (1-LR)*qtable[curState][action] + LR*(reward + DR*Math.max(...qtable[newState]))
   } else {
     qtable[curState] = [0, 0, 0, 0]
   }
 }
 
-/*    [0,1], [0,-1], [1,0], [-1,0]
-s0
-s1
-s2
-...
-*/
-
-const qtable = JSON.parse(localStorage.getItem('qtable')) || qt || {}
-const actions = [[0, 1], [0, -1], [1, 0], [-1, 0]]
-
-let lr = 0.01,
-    dr = 0.95,
-    epsilon = parseFloat(localStorage.getItem('epsilon')) || 1,
-    episode = parseInt(localStorage.getItem('episode')) || 1,
-    epsilonDiscount = 0.99,
-    prevPy = py,
-    prevPx = px,
-    curState = getState(),
-    newState = curState,
-    action = null, // 0 1 2 3
-    reward = 0
-
-
-/**************************************************************************************
-                                    EVENT LISTENERS
-***************************************************************************************/
-function resetFps() {
-  if (interval) { clearInterval(interval) }
-  interval = setInterval(game, gameSpeed)
-  fps.textContent = Math.round(1000/gameSpeed)
-}
-
-function resetRangeDOMNodes() {
-  rangeInput.setAttribute('value', epsilon*100)
-  rangeInfo.textContent = epsilon
-}
-
-const startBtns = document.querySelectorAll('.start-btn')
-const rangeInput = document.querySelector('input[type=range]')
-const rangeInfo = document.getElementById('range-info')
-
-/* MODE */
-startBtns.forEach((btn) => {
-  btn.addEventListener('click', (e) => {
-    e.preventDefault()
-    mode = e.target.textContent
-
-    if (trail.length > 5 && trail.length > parseInt(best.textContent)) {
-      best.textContent = trail.length
-      localStorage.setItem('best', trail.length)
-    }
-
-    resetGame()
-    if (interval) { clearInterval(interval) }
-    interval = setInterval(game, gameSpeed)
-  })
-})
-
-/* SPEED */
-document.getElementById('increase-speed').addEventListener('click', (e) => {
-  gameSpeed /= 2
-  resetFps()
-})
-
-document.getElementById('decrease-speed').addEventListener('click', (e) => {
-  gameSpeed *= 2
-  resetFps()
-})
-
-rangeInput.addEventListener('input', (e) => {
-  epsilon = parseInt(e.target.value) / 100
-  resetRangeDOMNodes()
+(function main() {
   resetGame()
-})
 
+  /* HAMILTONIAN CYCLE */
+  visited[py][px] = true
+  path.push([py, px])
+  findHamiltonianCycle(path, [py, px])
+  // console.log(path)
 
+  /* MODE */
+  startBtns.forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault()
+      mode = e.target.textContent
 
-resetRangeDOMNodes()
-interval = setInterval(game, gameSpeed)
+      if (trail.length > 5 && trail.length > parseInt(best.textContent)) {
+        best.textContent = trail.length
+        localStorage.setItem('best', trail.length)
+      }
+
+      resetGame()
+      if (interval) { clearInterval(interval) }
+      interval = setInterval(game, mspf)
+    })
+  })
+
+  /* SPEED */
+  document.getElementById('increase-speed').addEventListener('click', (e) => {
+    mspf /= 2
+    resetFps()
+  })
+
+  document.getElementById('decrease-speed').addEventListener('click', (e) => {
+    mspf *= 2
+    resetFps()
+  })
+
+  rangeInput.addEventListener('input', (e) => {
+    epsilon = parseInt(e.target.value) / 100
+    resetRangeDOMNodes()
+    resetGame()
+  })
+
+  resetRangeDOMNodes()
+  interval = setInterval(game, mspf)
+})()

@@ -10,7 +10,7 @@ body {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  background: linear-gradient(to right, #403b4a, #e7e9bb);
+  background: rgba(0, 0, 0, 0.666);
   color: #fff;
 }
 
