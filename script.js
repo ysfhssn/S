@@ -23,19 +23,19 @@ let px, py,
     ax, ay,
     dir,
     trail, tail,
-    i,
+    pathIndex,
     canMove
 
 /* Q LEARNING VARIABLES */
-const qtable = JSON.parse(localStorage.getItem('qtable')) || qt || {}
+const qtable = qt // {}
 const ACTION_SPACE = [[0, 1], [0, -1], [1, 0], [-1, 0]]
 
 const LR = 0.01
 const DR = 0.95
 const EPSILON_DISCOUNT = 0.99
 
-let epsilon = parseFloat(localStorage.getItem('epsilon')) || 1,
-    episode = parseInt(localStorage.getItem('episode')) || 1,
+let epsilon = Object.keys(qtable).length === 0 ? 1 : 0,
+    episode = 1,
     prevPy,
     prevPx,
     curState,
@@ -63,13 +63,13 @@ function resetGame() {
 
   px = Math.floor(0.5 * COLS)
   py = Math.floor(0.5 * ROWS)
-  ax = Math.floor(0.6 * COLS)
-  ay = Math.floor(0.6 * ROWS)
+  ax = Math.floor(Math.random() * COLS)
+  ay = Math.floor(Math.random() * ROWS)
   xv = yv = 0
   trail = []
   tail = 5
   dir = null
-  i = 0
+  pathIndex = 0
 
   if (mode === 'SINGLE PLAYER 🎮') {
     canMove = true
@@ -108,9 +108,9 @@ function game() {
   ctx.fillRect(ax * SIZE_X, ay * SIZE_Y, SIZE_X - 2, SIZE_Y - 2)
 
   if (mode === 'HAMILTONIAN CYCLE ⚪') {
-    px = path[i][0]
-    py = path[i][1]
-    i = (i + 1) % (ROWS * COLS)
+    px = path[pathIndex][0]
+    py = path[pathIndex][1]
+    pathIndex = (pathIndex + 1) % (ROWS * COLS)
   }
 
   else if (mode === 'SINGLE PLAYER 🎮') {
@@ -155,7 +155,7 @@ function game() {
       }
 
       if (mode === 'Q LEARNING 💪') {
-        reward = -10
+        reward = -100
         updateQtable() // updating Qtable before resetting the game
 
         if (episode % 100 === 0) {
@@ -163,14 +163,12 @@ function game() {
           resetRangeDOMNodes()
           console.log('episode', episode, 'eps', epsilon)
           console.log('qtable', qtable)
-          localStorage.setItem('qtable', JSON.stringify(qtable))
-          localStorage.setItem('epsilon', epsilon)
-          localStorage.setItem('episode', episode)
         }
         episode++
       }
 
       resetGame()
+      return
     }
 
     if (ax == px && ay == py) {
@@ -281,11 +279,7 @@ function getState() {
 }
 
 function updateQtable() {
-  if (qtable[curState]) {
-    qtable[curState][action] = (1-LR)*qtable[curState][action] + LR*(reward + DR*Math.max(...qtable[newState]))
-  } else {
-    qtable[curState] = [0, 0, 0, 0]
-  }
+  qtable[curState][action] = (1-LR)*qtable[curState][action] + LR*(reward + DR*Math.max(...qtable[newState]))
 }
 
 (function main() {
