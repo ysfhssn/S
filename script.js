@@ -13,6 +13,15 @@ const rangeInfo = document.getElementById('range-info')
 const [ROWS, COLS] = [20, 20]
 const SIZE_X = Math.round(canv.width / COLS)
 const SIZE_Y = Math.round(canv.height / ROWS)
+// const obstacles = []
+// for (let i = 0; i < ROWS; i++) {
+//   obstacles.push({ x: 0, y: i})
+//   obstacles.push({ x: COLS-1, y: i})
+// }
+// for (let i = 0; i < COLS; i++) {
+//   obstacles.push({ x: i, y: 0})
+//   obstacles.push({ x: i, y: ROWS-1})
+// }
 
 let interval = null,
     mode = 'SINGLE PLAYER 🎮',
@@ -43,6 +52,11 @@ let epsilon = Object.keys(qtable).length === 0 ? 1 : 0,
     action, // 0 1 2 3
     reward = 0
 
+/* DQN Agent */
+const agent = new DQNAgent([12], ACTION_SPACE.length)
+// const agent = new DQNAgent([ROWS, COLS, 1], ACTION_SPACE.length)
+agent.load()
+
 /* HAMILTONIAN CYCLE VARIABLES */
 const path = []
 const visited = new Array(ROWS).fill().map(() => new Array(COLS).fill(false))
@@ -63,8 +77,7 @@ function resetGame() {
 
   px = Math.floor(0.5 * COLS)
   py = Math.floor(0.5 * ROWS)
-  ax = Math.floor(Math.random() * COLS)
-  ay = Math.floor(Math.random() * ROWS)
+  spawnApple()
   xv = yv = 0
   trail = []
   tail = 5
@@ -76,11 +89,13 @@ function resetGame() {
     document.addEventListener('keydown', keyPush)
   }
 
-  else if (mode === 'Q LEARNING 💪') {
+  else if (mode === 'Q LEARNING 💪' || mode === 'DQN 🧠') {
+    resetRangeDOMNodes()
     reward = 0
     prevPx = px
     prevPy = py
-    curState = newState = getState()
+    if (mode === 'DQN 🧠') curState = newState = JSON.parse(getState())
+    else curState = newState = getState()
   }
 }
 
@@ -93,7 +108,16 @@ function moveSnakeByOffset() {
   if (py > ROWS - 1) { py = 0 }
 }
 
-function game() {
+function spawnApple() {
+  ax = Math.floor(Math.random() * COLS)
+  ay = Math.floor(Math.random() * ROWS)
+  // while (obstacles.find(o => o.x === ax && o.y === ay)) {
+  //   ax = Math.floor(Math.random() * COLS)
+  //   ay = Math.floor(Math.random() * ROWS)
+  // }
+}
+
+async function game() {
   // console.log(getState())
   prevPx = px
   prevPy = py
@@ -107,10 +131,14 @@ function game() {
   ctx.fillStyle = 'red'
   ctx.fillRect(ax * SIZE_X, ay * SIZE_Y, SIZE_X - 2, SIZE_Y - 2)
 
+  // ctx.fillStyle = 'grey'
+  // for (let i = 0; i < obstacles.length; i++) {
+  //   ctx.fillRect(obstacles[i].x * SIZE_X, obstacles[i].y * SIZE_Y, SIZE_X - 1, SIZE_Y - 1)
+  // }
+
   if (mode === 'HAMILTONIAN CYCLE ⚪') {
     px = path[pathIndex][0]
     py = path[pathIndex][1]
-    pathIndex = (pathIndex + 1) % (ROWS * COLS)
   }
 
   else if (mode === 'SINGLE PLAYER 🎮') {
@@ -142,13 +170,34 @@ function game() {
     else { action = 3 }
   }
 
+  else if (mode === 'DQN 🧠') {
+    reward = 0
+
+    curState = newState
+
+    if (Math.random() < agent.epsilon) {
+      [py, px] = neighbors([py, px])[Math.floor(Math.random() * neighbors([py, px]).length)]
+    } else {
+      [yv, xv] = ACTION_SPACE[agent.predictQs(curState).indexOf(Math.max(...agent.predictQs(curState)))]
+      moveSnakeByOffset()
+    }
+
+    newState = JSON.parse(getState())
+
+    if (px - prevPx > 0) { action = 0 }
+    else if (px - prevPx < 0) { action = 1 }
+    else if (py - prevPy > 0) { action = 2 }
+    else { action = 3 }
+  }
+
   ctx.fillStyle = 'lime'
   for (let i = 0; i < trail.length; i++) {
     ctx.fillRect(trail[i].x * SIZE_X, trail[i].y * SIZE_Y, SIZE_X - 1, SIZE_Y - 1)
 
-    if (mode === 'SINGLE PLAYER 🎮' && !dir) { return }
+    if (mode === 'HAMILTONIAN CYCLE ⚪' && pathIndex === 0) break
+    if (mode === 'SINGLE PLAYER 🎮' && !dir) break
 
-    if (trail[i].x == px && trail[i].y == py) {
+    if ((trail[i].x === px && trail[i].y === py) /*|| obstacles.find(o => o.x === px - xv && o.y === py - yv)*/) {
       if (trail.length > 5 && trail.length > parseInt(best.textContent)) {
         best.textContent = trail.length
         localStorage.setItem('best', trail.length)
@@ -167,6 +216,23 @@ function game() {
         episode++
       }
 
+      else if (mode === 'DQN 🧠') {
+        reward = -100
+
+        if (agent.epsilon > 0.1) {
+          const transition = [curState, action, reward, newState, true]
+          agent.updateReplayMemory(transition)
+          await agent.trainStep(true)
+
+          if (episode % 100 === 0) {
+            agent.epsilon *= agent.epsilonDiscount
+            console.log('episode', episode, 'eps', agent.epsilon)
+          }
+        }
+
+        episode++
+      }
+
       resetGame()
       return
     }
@@ -177,14 +243,24 @@ function game() {
         console.log('reward', reward)
       }
 
+      else if (mode === 'DQN 🧠') {
+        reward = 10
+        console.log('reward', reward)
+      }
+
       tail++
       score.textContent = tail
-      ax = Math.floor(Math.random() * COLS)
-      ay = Math.floor(Math.random() * ROWS)
+      spawnApple()
     }
   }
 
-  if (mode === 'Q LEARNING 💪') { updateQtable() }
+  if (mode === 'HAMILTONIAN CYCLE ⚪') pathIndex = (pathIndex + 1) % (ROWS * COLS)
+  else if (mode === 'Q LEARNING 💪') updateQtable()
+  else if (mode === 'DQN 🧠' && agent.epsilon > 0.1) {
+    const transition = [curState, action, reward, newState, false]
+    agent.updateReplayMemory(transition)
+    await agent.trainStep(false)
+  }
 }
 
 function keyPush(evt) {
@@ -213,8 +289,9 @@ function resetFps() {
 }
 
 function resetRangeDOMNodes() {
-  rangeInput.setAttribute('value', epsilon*100)
-  rangeInfo.textContent = epsilon.toFixed(5)
+  const rangeValue = mode === 'DQN 🧠' ? agent.epsilon : epsilon
+  rangeInput.setAttribute('value', rangeValue*100)
+  rangeInfo.textContent = rangeValue.toFixed(5)
 }
 
 /* HAMILTONIAN CYCLE FUNCTIONS */
@@ -238,14 +315,15 @@ function neighbors(v) {
   const res = []
   for (let i of [-1, 0, 1]) {
     for (let j of [-1, 0, 1]) {
-      if (i === j || i === -j) { continue }
+      if (i === j || i === -j) continue
       let vi = vY + i
       let vj = vX + j
-      if (vi === -1) { vi = ROWS - 1 }
-      else if (vi === ROWS) { vi = 0 }
-      else if (vj === -1) { vj = COLS - 1 }
-      else if (vj === COLS) { vj = 0 }
-      if (!res.includes([vi, vj])) { res.push([vi, vj]) }
+      if (vi === -1) vi = ROWS - 1
+      else if (vi === ROWS) vi = 0
+      else if (vj === -1) vj = COLS - 1
+      else if (vj === COLS) vj = 0
+      // if (trail.find(t => t.x === vj && t.y === vi) /*|| obstacles.find(o => o.x === vj && o.y === vi)*/) continue
+      res.push([vi, vj])
     }
   }
   return res
@@ -262,6 +340,7 @@ function getState() {
   else if (py === ROWS-1 && prevPy === 0) { dirU = 1 }
   else if (py - prevPy > 0) { dirD = 1 }
   else if (py - prevPy < 0) { dirU = 1 }
+
   return JSON.stringify([
     dirR,
     dirL,
@@ -276,6 +355,16 @@ function getState() {
     !dirU && trail.find(t => JSON.stringify({ x: px, y: (py+1)%COLS }) === JSON.stringify(t)) ? 1 : 0,
     !dirD && trail.find(t => JSON.stringify({ x: px, y: (py-1)%COLS }) === JSON.stringify(t)) ? 1 : 0
   ])
+}
+
+function getFullState() {
+  const state = Array(ROWS).fill().map(() => Array(COLS).fill(0));
+  for (const {x, y} of trail) {
+    state[y][x] = 1
+  }
+  state[py][px] = 2
+  state[ay][ax] = 3
+  return state
 }
 
 function updateQtable() {
@@ -321,10 +410,8 @@ function updateQtable() {
 
   rangeInput.addEventListener('input', (e) => {
     epsilon = parseInt(e.target.value) / 100
-    resetRangeDOMNodes()
     resetGame()
   })
 
-  resetRangeDOMNodes()
   interval = setInterval(game, mspf)
 })()
