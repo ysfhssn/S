@@ -55,7 +55,7 @@ let epsilon = Object.keys(qtable).length === 0 ? 1 : 0,
 /* DQN Agent */
 const agent = new DQNAgent([12], ACTION_SPACE.length)
 // const agent = new DQNAgent([ROWS, COLS, 1], ACTION_SPACE.length)
-agent.load()
+agent.load('./mymodel2k.json')
 
 /* HAMILTONIAN CYCLE VARIABLES */
 const path = []

@@ -5,11 +5,11 @@ class DQNAgent {
     this.updateTargetModel()
 
     this.replayMemory = []
-    this.replayMemoryMinSize = 100
-    this.replayMemoryMaxSize = 1000
+    this.replayMemoryMinSize = 1_000
+    this.replayMemoryMaxSize = 10_000
 
     this.targetUpdateCounter = 0
-    this.targetUpdateFrequency = 100
+    this.targetUpdateFrequency = 10
 
     this.learningRate = 0.001
     this.batchSize = 128
@@ -131,9 +131,9 @@ class DQNAgent {
     this.model.save('downloads://mymodel')
   }
 
-  async load() {
-    this.model = await tf.loadLayersModel('./mymodel.json')
-    this.targetModel = await tf.loadLayersModel('./mymodel.json')
+  async load(path) {
+    this.model = await tf.loadLayersModel(path)
+    this.targetModel = await tf.loadLayersModel(path)
     this.epsilon = 0
     console.log('===== Model successfully loaded ✔️ =====')
   }
